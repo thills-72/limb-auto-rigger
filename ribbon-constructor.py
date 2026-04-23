@@ -4,9 +4,8 @@ for jnt in cmds.ls(selection = True):
     position = cmds.xform(jnt, query = True, worldSpace = True, translation = True)
     positions.append(position)
 
-print(positions)
-crv1 = cmds.curve(degree = 1, point = positions)
-crv2 = cmds.duplicate(crv)[0]
+#crv1 = cmds.curve(degree = 1, point = positions)
+#crv2 = cmds.duplicate(crv)[0]
 
 """
 need to get perpendicular vector direction from the plane that the three joints are sitting within
@@ -37,10 +36,12 @@ nVectorNeg = [None, None, None]
 aVector[0] = B[0] - A[0]
 aVector[1] = B[1] - A[1]
 aVector[2] = B[2] - A[2]
+aVector = [i * 0.1 for i in aVector]
 
 bVector[0] = B[0] - C[0]
 bVector[1] = B[1] - C[1]
 bVector[2] = B[2] - C[2]
+bVector = [i * 0.1 for i in bVector]
 
 nVectorPos[0] = ((aVector[1] * bVector[2]) - (bVector[1] * aVector[2]))
 nVectorPos[1] = (-1 * ((aVector[0] * bVector[2]) - (bVector[0] * aVector[2])))
@@ -49,6 +50,7 @@ nVectorPos[2] = ((aVector[0] * bVector[1]) - (bVector[0] * aVector[1]))
 nVectorPosB = [nVectorPos[0] + B[0], nVectorPos[1] + B[1], nVectorPos[2] + B[2]]
 nVectorPosA = [nVectorPos[0] + A[0], nVectorPos[1] + A[1], nVectorPos[2] + A[2]]
 nVectorPosC = [nVectorPos[0] + C[0], nVectorPos[1] + C[1], nVectorPos[2] + C[2]]
+posCurve = [nVectorPosA, nVectorPosB, nVectorPosC]
 
 nVectorNeg[0] = ((bVector[1] * aVector[2]) - (aVector[1] * bVector[2]))
 nVectorNeg[1] = (-1 * ((bVector[0] * aVector[2]) - (aVector[0] * bVector[2])))
@@ -57,10 +59,23 @@ nVectorNeg[2] = ((bVector[0] * aVector[1]) - (aVector[0] * bVector[1]))
 nVectorNegB = [nVectorNeg[0] + B[0], nVectorNeg[1] + B[1], nVectorNeg[2] + B[2]]
 nVectorNegA = [nVectorNeg[0] + A[0], nVectorNeg[1] + A[1], nVectorNeg[2] + A[2]]
 nVectorNegC = [nVectorNeg[0] + C[0], nVectorNeg[1] + C[1], nVectorNeg[2] + C[2]]
+negCurve = [nVectorNegA, nVectorNegB, nVectorNegC]
 
+"""
 cmds.xform(crv1 + ".cv[0]", worldSpace = True, translation = nVectorPosA)
 cmds.xform(crv1 + ".cv[1]", worldSpace = True, translation = nVectorPosB)
 cmds.xform(crv1 + ".cv[2]", worldSpace = True, translation = nVectorPosC)
 cmds.xform(crv2 + ".cv[0]", worldSpace = True, translation = nVectorNegA)
 cmds.xform(crv2 + ".cv[1]", worldSpace = True, translation = nVectorNegB)
 cmds.xform(crv2 + ".cv[2]", worldSpace = True, translation = nVectorNegC)
+"""
+
+crv1 = cmds.curve(degree = 1, point = [posCurve[0], posCurve[1]])
+crv2 = cmds.curve(degree = 1, point = [negCurve[0], negCurve[1]])
+crv3 = cmds.curve(degree = 1, point = [posCurve[1], posCurve[2]])
+crv4 = cmds.curve(degree = 1, point = [negCurve[1], negCurve[2]])
+
+surface1 = cmds.loft(crv1, crv2, constructionHistory = True, range = True, autoReverse = True)
+surface2 = cmds.loft(crv3, crv4, constructionHistory = True, range = True, autoReverse = True)
+
+cmds.delete(crv1, crv2, crv3, crv4)
