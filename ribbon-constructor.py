@@ -1,3 +1,6 @@
+import math
+
+################functions######################
 """
 takes a surface and a UV ratio position and pins a locator that follows the surface to that point, surface variable is a string and U and V are floats
 """ 
@@ -46,7 +49,9 @@ def shape_circle_cons(con, scale):
         cmds.select(con + f".cv[{index}]")
         cmds.scale(scale / 2, scale / 2, scale / 2)
     return
+#################################################
 
+################ribbon_creation##################
 
 positions = []
 joints = cmds.ls(selection = True)
@@ -80,16 +85,19 @@ aVector = [None, None, None]
 bVector = [None, None, None]
 nVectorPos = [None, None, None]
 nVectorNeg = [None, None, None]
+scale_constant = 1
 
 aVector[0] = B[0] - A[0]
 aVector[1] = B[1] - A[1]
 aVector[2] = B[2] - A[2]
-aVector = [i * 0.1 for i in aVector]
+aVectorMag = scale_constant / (abs(math.sqrt(math.pow(aVector[0], 2) + math.pow(aVector[1], 2) + math.pow(aVector[2], 2))))
+aVector = [i * aVectorMag for i in aVector]
 
 bVector[0] = B[0] - C[0]
 bVector[1] = B[1] - C[1]
 bVector[2] = B[2] - C[2]
-bVector = [i * 0.1 for i in bVector]
+bVectorMag = scale_constant / (abs(math.sqrt(math.pow(bVector[0], 2) + math.pow(bVector[1], 2) + math.pow(bVector[2], 2))))
+bVector = [i * bVectorMag for i in bVector]
 
 nVectorPos[0] = ((aVector[1] * bVector[2]) - (bVector[1] * aVector[2]))
 nVectorPos[1] = (-1 * ((aVector[0] * bVector[2]) - (bVector[0] * aVector[2])))
@@ -122,6 +130,14 @@ cmds.delete(crv1, crv2, crv3, crv4)
 ribbon1 = cmds.rebuildSurface(surface1, rebuildType = 0, spansU = 1, spansV = 4, degreeU = 2, degreeV = 3)
 ribbon2 = cmds.rebuildSurface(surface2, rebuildType = 0, spansU = 1, spansV = 4, degreeU = 2, degreeV = 3)
 
+"""
+twistBlend = cmds.duplicate(ribbon1)
+cmds.select(twistBlend)
+twist_deformer = cmds.nonLinear(type = "twist")
+sineBlend = cmds.duplicate(ribbon1)
+cmds.select(sineBlend)
+sine_deformer = cmds.nonLinear(type = "sine")
+"""
 
 locators = []
 locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.0))
@@ -146,18 +162,149 @@ for index, locs in enumerate(locators):
 
 locators_for_controls = locators[1:4] + locators [5:8]
 joints_for_controls = skinning_jnts[1:4] + skinning_jnts[5:8]
-controls = []
+ribbon_controls = []
 control_groups = []
 for index, loc in enumerate(locators_for_controls):
-    controls.append(cmds.circle()[0])
+    ribbon_controls.append(cmds.circle()[0])
     control_groups.append(cmds.group())
     pConstraint = cmds.parentConstraint(loc, control_groups[index], maintainOffset = False)
     cmds.delete(pConstraint)
     cmds.parentConstraint(controls[index], joints_for_controls[index])
-    shape_circle_cons(controls[index], 3)
-    cmds.parentConstraint(loc, controls[index])
+    shape_circle_cons(ribbon_controls[index], 3)
+    cmds.parentConstraint(loc, ribbon_controls[index])
 
-#twistBlend = cmds.duplicate(surface1)[0]
-#sineBlend = cmds.duplicate(surface1)[0]
+"""
+cmds.parent(twistBlend, twist_deformer, locators[0])
+twistBlend_grp = cmds.group(twistBlend, twist_deformer)
+cmds.move(0, -3, 0, twistBlend_grp, objectSpace = True, relative = True)
 
-#cmds.blendShape(twistBlend, sineBlend, surface1)
+cmds.parent(sineBlend, sine_deformer, locators[0])
+sineBlend_grp = cmds.group(sineBlend, sine_deformer)
+cmds.move(0, -6, 0, sineBlend_grp, objectSpace = True, relative = True)
+
+cmds.blendShape(twistBlend, sineBlend, surface1)
+"""
+#################################################
+
+################fk_creation######################
+fk_joints = cmds.duplicate(joints[0], renameChildren = True)
+for index, jnt in enumerate(fk_joints):
+    fk_joints[index] = cmds.rename(fk_joints[index], fk_joints[index] + "_fk")
+shoulder = fk_joints[0]
+elbow = fk_joints[1]
+wrist = fk_joints[2]
+
+#create control
+shoulder_con = cmds.circle()
+cmds.select(shoulder_con[0] + ".cv[:]")
+cmds.rotate(0, "90deg", 0, relative = True)
+cmds.scale(4, 4, 4)
+elbow_con = cmds.duplicate(shoulder_con[0])
+wrist_con = cmds.duplicate(shoulder_con[0])
+
+#parent controls
+shoulder_grp = cmds.group(shoulder_con[0])
+elbow_grp = cmds.group(elbow_con[0])
+wrist_grp = cmds.group(wrist_con[0])
+
+#move grps to joints
+cmds.matchTransform(shoulder_grp, shoulder)
+cmds.matchTransform(elbow_grp, elbow)
+cmds.matchTransform(wrist_grp, wrist)
+
+#parent joints to cons
+cmds.parentConstraint(shoulder_con[0], shoulder)
+cmds.parentConstraint(elbow_con[0], elbow)
+cmds.parentConstraint(wrist_con[0], wrist)
+
+#parent grps to cons
+cmds.parent(wrist_grp, elbow_con[0])
+cmds.parent(elbow_grp, shoulder_con[0])
+#################################################
+
+################ik_creation######################
+#select joint chain
+ik_joints = cmds.duplicate(joints[0], renameChildren = True)
+for index, jnt in enumerate(ik_joints):
+    ik_joints[index] = cmds.rename(ik_joints[index], ik_joints[index] + "_ik")
+shoulder = ik_joints[0]
+elbow = ik_joints[1]
+wrist = ik_joints[2]
+
+#build controls: arm ik con + pv con
+arm_con = cmds.circle()[0]
+cmds.setAttr(arm_con + ".lineWidth", 2)
+for index in range(0, 8):
+    if index % 2 == 0:
+        cmds.select(arm_con + f".cv[{index}]")
+        cmds.move(0, 0, 1, objectSpace = True, relative = True)
+    if index % 2 == 1:
+        cmds.select(arm_con + f".cv[{index}]")
+        cmds.move(0, 0, -1, objectSpace = True, relative = True)
+arm_grp = cmds.group(arm_con)
+
+pv_con = cmds.circle()[0]
+pv_grp = cmds.group(pv_con)
+
+#rotate cvs of arm ik con
+cmds.select(arm_con + ".cv[:]")
+cmds.rotate(0, "90deg", 0, relative = True)
+cmds.scale(5, 5, 5)
+
+#position arm grp
+cmds.matchTransform(arm_grp, wrist)
+
+#calculate pv position
+shoulder_pos = cmds.xform(shoulder, query = True, worldSpace = True, translation = True)
+elbow_pos = cmds.xform(elbow, query = True, worldSpace = True, translation = True)
+wrist_pos = cmds.xform(wrist, query = True, worldSpace = True, translation = True)
+
+crv = cmds.curve(degree = 1, p = [shoulder_pos, elbow_pos, wrist_pos])
+cmds.moveVertexAlongDirection(crv + ".cv[1]", n = 8)
+pv_pos = cmds.xform(crv + ".cv[1]", query = True, worldSpace = True, translation = True)
+
+#position pv grp
+cmds.xform(pv_grp, worldSpace = True, translation = pv_pos)
+cmds.delete(crv)
+
+#create ikHandle
+ikh = cmds.ikHandle(startJoint = shoulder, endEffector = wrist)
+cmds.setAttr(ikh[0] + ".visibility", False)
+
+#parent ik to con
+cmds.parent(ikh[0], arm_con)
+
+#pole vector constraint
+cmds.poleVectorConstraint(pv_con, ikh[0])
+
+#orient constraint wrist joint to arm con
+cmds.orientConstraint(arm_con, wrist, maintainOffset = True)
+#################################################
+
+##################tie_together###################
+shoulder_constraint = cmds.parentConstraint(ik_joints[0], fk_joints[0], joints[0])
+elbow_constraint = cmds.parentConstraint(ik_joints[1], fk_joints[1], joints[1])
+wrist_constraint = cmds.parentConstraint(ik_joints[2], fk_joints[2], joints[2])
+
+print(arm_con)
+cmds.addAttr(arm_con, longName = "ikfk", attributeType = "float", min = 0, max = 1, keyable = True)
+cmds.addAttr(arm_con, longName = "ribbon_Controls", attributeType = "float", min = 0, max = 1, keyable = True)
+
+cmds.connectAttr(arm_con + ".ikfk", shoulder_constraint[0] + f".{fk_joints[0]}W1")
+cmds.connectAttr(arm_con + ".ikfk", elbow_constraint[0] + f".{fk_joints[1]}W1")
+cmds.connectAttr(arm_con + ".ikfk", wrist_constraint[0] + f".{fk_joints[2]}W1")
+cmds.connectAttr(arm_con + ".ikfk", shoulder_con[0] + ".visibility")
+cmds.connectAttr(arm_con + ".ikfk", elbow_con[0] + ".visibility")
+cmds.connectAttr(arm_con + ".ikfk", wrist_con[0] + ".visibility")
+
+reverse = cmds.shadingNode("reverse", asUtility = True)
+
+cmds.connectAttr(arm_con + ".ikfk", reverse + ".inputX")
+
+cmds.connectAttr(reverse + ".outputX", shoulder_constraint[0] + f".{ik_joints[0]}W0")
+cmds.connectAttr(reverse + ".outputX", elbow_constraint[0] + f".{ik_joints[1]}W0")
+cmds.connectAttr(reverse + ".outputX", wrist_constraint[0] + f".{ik_joints[2]}W0")
+cmds.connectAttr(reverse + ".outputX", pv_con + ".visibility")
+
+for index, con in enumerate(ribbon_controls):
+    cmds.connectAttr(arm_con + ".ribbon_Controls", con + ".visibility")
