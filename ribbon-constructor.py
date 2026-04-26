@@ -38,6 +38,15 @@ def translates_to_zero(object):
     cmds.setAttr(f"{object}.translateZ", 0)
     return
 
+def shape_circle_cons(con, scale):
+    cmds.select(con + ".cv[:]")
+    cmds.scale(scale, scale, scale)
+    for index in range(0, 4):
+        index = index * 2
+        cmds.select(con + f".cv[{index}]")
+        cmds.scale(scale / 2, scale / 2, scale / 2)
+    return
+
 
 positions = []
 joints = cmds.ls(selection = True)
@@ -113,54 +122,42 @@ cmds.delete(crv1, crv2, crv3, crv4)
 ribbon1 = cmds.rebuildSurface(surface1, rebuildType = 0, spansU = 1, spansV = 4, degreeU = 2, degreeV = 3)
 ribbon2 = cmds.rebuildSurface(surface2, rebuildType = 0, spansU = 1, spansV = 4, degreeU = 2, degreeV = 3)
 
-loc1 = locator_to_surface_cv(ribbon1, 0.5, 0.0)
-loc2 = locator_to_surface_cv(ribbon1, 0.5, 0.25)
-loc3 = locator_to_surface_cv(ribbon1, 0.5, 0.5)
-loc4 = locator_to_surface_cv(ribbon1, 0.5, 0.75)
 
-loc5 = locator_to_surface_cv(ribbon2, 0.5, 0.0)
-loc6 = locator_to_surface_cv(ribbon2, 0.5, 0.25)
-loc7 = locator_to_surface_cv(ribbon2, 0.5, 0.5)
-loc8 = locator_to_surface_cv(ribbon2, 0.5, 0.75)
-loc9 = locator_to_surface_cv(ribbon2, 0.5, 1.0)
+locators = []
+locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.0))
+locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.25))
+locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.5))
+locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.75))
+
+locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.0))
+locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.25))
+locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.5))
+locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.75))
+locators.append(locator_to_surface_cv(ribbon2, 0.5, 1.0))
 
 cmds.skinCluster(joints[0], joints[1], ribbon1)
 cmds.skinCluster(joints[1], joints[2], ribbon2)
 
-jnt1 = cmds.joint()
-jnt2 = cmds.joint()
-jnt3 = cmds.joint()
-jnt4 = cmds.joint()
-jnt5 = cmds.joint()
+skinning_jnts = []
+for index, locs in enumerate(locators):
+    skinning_jnts.append(cmds.joint())
+    cmds.parent(skinning_jnts[index], locators[index])
+    translates_to_zero(skinning_jnts[index])
 
-jnt6 = cmds.joint()
-jnt7 = cmds.joint()
-jnt8 = cmds.joint()
-jnt9 = cmds.joint()
+locators_for_controls = locators[1:4] + locators [5:8]
+joints_for_controls = skinning_jnts[1:4] + skinning_jnts[5:8]
+controls = []
+control_groups = []
+for index, loc in enumerate(locators_for_controls):
+    controls.append(cmds.circle()[0])
+    control_groups.append(cmds.group())
+    pConstraint = cmds.parentConstraint(loc, control_groups[index], maintainOffset = False)
+    cmds.delete(pConstraint)
+    cmds.parentConstraint(controls[index], joints_for_controls[index])
+    shape_circle_cons(controls[index], 3)
+    cmds.parentConstraint(loc, controls[index])
 
-cmds.parent(jnt1, loc1)
-cmds.parent(jnt2, loc2)
-cmds.parent(jnt3, loc3)
-cmds.parent(jnt4, loc4)
-cmds.parent(jnt5, loc5)
+#twistBlend = cmds.duplicate(surface1)[0]
+#sineBlend = cmds.duplicate(surface1)[0]
 
-cmds.parent(jnt6, loc6)
-cmds.parent(jnt7, loc7)
-cmds.parent(jnt8, loc8)
-cmds.parent(jnt9, loc9)
-
-translates_to_zero(jnt1)
-translates_to_zero(jnt2)
-translates_to_zero(jnt3)
-translates_to_zero(jnt4)
-translates_to_zero(jnt5)
-
-translates_to_zero(jnt6)
-translates_to_zero(jnt7)
-translates_to_zero(jnt8)
-translates_to_zero(jnt9)
-
-twistBlend = cmds.duplicate(surface1)[0]
-sineBlend = cmds.duplicate(surface1)[0]
-
-cmds.blendShape(twistBlend, sineBlend, surface1)
+#cmds.blendShape(twistBlend, sineBlend, surface1)
