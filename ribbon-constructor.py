@@ -4,6 +4,7 @@ import math
 """
 takes a surface and a UV ratio position and pins a locator that follows the surface to that point, surface variable is a string and U and V are floats
 """ 
+
 def locator_to_surface_cv(surf, U, V):
     #create point on surface node
     infoNode = cmds.pointOnSurface(surf, parameterU = U, parameterV = V, constructionHistory = True)
@@ -37,7 +38,7 @@ def locator_to_surface_cv(surf, U, V):
     
 def skinning_joint_density(ribbon, density):
     locators = []
-    for index in range(0, density):
+    for index in range(0, density + 1):
         locators.append(locator_to_surface_cv(ribbon, 0.5, (index / density)))
     return locators
     
@@ -60,9 +61,7 @@ def move_vector(vecA, vecB):
     return out_vec
 
 def translates_to_zero(object):
-    cmds.setAttr(f"{object}.translateX", 0)
-    cmds.setAttr(f"{object}.translateY", 0)
-    cmds.setAttr(f"{object}.translateZ", 0)
+    cmds.move(0, 0, 0, object, objectSpace = True)
     return
 
 def shape_circle_cons(con, scale):
@@ -73,6 +72,35 @@ def shape_circle_cons(con, scale):
         cmds.select(con + f".cv[{index}]")
         cmds.scale(scale / 2, scale / 2, scale / 2)
     return
+    
+def create_child_joints(root):
+    joint_list = []
+    for index, locs in enumerate(root):
+        joint_list.append(cmds.joint(radius = 0.3))
+        cmds.parent(joint_list[index], root[index])
+        translates_to_zero(joint_list[index])
+    return joint_list
+    
+def create_ribbon(point1, point2, point3, point4):
+    crv1 = cmds.curve(degree = 1, point = [point1, point2])
+    crv2 = cmds.curve(degree = 1, point = [point3, point4])
+    ribbon = cmds.loft(crv1, crv2, constructionHistory = True, range = True, autoReverse = True)[0]
+    cmds.delete(crv1, crv2)
+    return ribbon
+  
+def ribbon_skinning_joints(ribbon, root_joint, density):
+    joint_list = []
+    info_node = cmds.pointOnSurface(ribbon, parameterU = 0.5, parameterV = 0.5, constructionHistory = True)
+    for index in range(0, density):
+        joint_list.append(cmds.joint())
+        cmds.parent(joint_list[index], root_joint)
+        cmds.setAttr(info_node + ".parameterV", index / (density - 1))
+        position = cmds.getAttr(info_node + ".position")[0]
+        cmds.move(position[0], position[1], position[2], joint_list[index], worldSpace = True)
+    cmds.skinCluster(joint_list, ribbon, toSelectedBones = True)
+    cmds.delete(info_node)
+    return joint_list
+    
 #################################################
 
 ################ribbon_creation##################
@@ -132,15 +160,8 @@ nVectorNegB = move_vector(nVectorNeg, B)
 nVectorNegC = move_vector(nVectorNeg, C)
 negCurve = [nVectorNegA, nVectorNegB, nVectorNegC]
 
-crv1 = cmds.curve(degree = 1, point = [posCurve[0], posCurve[1]])
-crv2 = cmds.curve(degree = 1, point = [negCurve[0], negCurve[1]])
-crv3 = cmds.curve(degree = 1, point = [posCurve[1], posCurve[2]])
-crv4 = cmds.curve(degree = 1, point = [negCurve[1], negCurve[2]])
-
-surface1 = cmds.loft(crv1, crv2, constructionHistory = True, range = True, autoReverse = True)[0]
-surface2 = cmds.loft(crv3, crv4, constructionHistory = True, range = True, autoReverse = True)[0]
-
-cmds.delete(crv1, crv2, crv3, crv4)
+surface1 = create_ribbon(posCurve[0], posCurve[1], negCurve[0], negCurve[1])
+surface2 = create_ribbon(posCurve[1], posCurve[2], negCurve[1], negCurve[2])
 
 ribbon1 = cmds.rebuildSurface(surface1, rebuildType = 0, spansU = 1, spansV = 4, degreeU = 2, degreeV = 3)
 ribbon2 = cmds.rebuildSurface(surface2, rebuildType = 0, spansU = 1, spansV = 4, degreeU = 2, degreeV = 3)
@@ -155,18 +176,16 @@ sine_deformer = cmds.nonLinear(type = "sine")
 """
 
 locators = skinning_joint_density(ribbon1, 8)
-
 locators = locators + skinning_joint_density(ribbon2, 8)
 
-cmds.skinCluster(joints[0], joints[1], ribbon1)
-cmds.skinCluster(joints[1], joints[2], ribbon2)
+#cmds.skinCluster(joints[0], joints[1], ribbon1)
+#cmds.skinCluster(joints[1], joints[2], ribbon2)
 
-skinning_jnts = []
-for index, locs in enumerate(locators):
-    skinning_jnts.append(cmds.joint())
-    cmds.parent(skinning_jnts[index], locators[index])
-    translates_to_zero(skinning_jnts[index])
+skinning_jnts = create_child_joints(locators)
 
+ribbon_skinning_joints(ribbon1, joints[0], 3)
+
+"""
 locators_for_controls = locators[1:4] + locators [5:8]
 joints_for_controls = skinning_jnts[1:4] + skinning_jnts[5:8]
 ribbon_controls = []
@@ -179,6 +198,7 @@ for index, loc in enumerate(locators_for_controls):
     cmds.parentConstraint(ribbon_controls[index], joints_for_controls[index])
     shape_circle_cons(ribbon_controls[index], 3)
     cmds.parentConstraint(loc, ribbon_controls[index])
+"""
 
 """
 cmds.parent(twistBlend, twist_deformer, locators[0])
@@ -191,42 +211,6 @@ cmds.move(0, -6, 0, sineBlend_grp, objectSpace = True, relative = True)
 
 cmds.blendShape(twistBlend, sineBlend, surface1)
 """
-#################################################
-
-################fk_creation######################
-fk_joints = cmds.duplicate(joints[0], renameChildren = True)
-for index, jnt in enumerate(fk_joints):
-    fk_joints[index] = cmds.rename(fk_joints[index], fk_joints[index] + "_fk")
-shoulder = fk_joints[0]
-elbow = fk_joints[1]
-wrist = fk_joints[2]
-
-#create control
-shoulder_con = cmds.circle()
-cmds.select(shoulder_con[0] + ".cv[:]")
-cmds.rotate(0, "90deg", 0, relative = True)
-cmds.scale(4, 4, 4)
-elbow_con = cmds.duplicate(shoulder_con[0])
-wrist_con = cmds.duplicate(shoulder_con[0])
-
-#parent controls
-shoulder_grp = cmds.group(shoulder_con[0])
-elbow_grp = cmds.group(elbow_con[0])
-wrist_grp = cmds.group(wrist_con[0])
-
-#move grps to joints
-cmds.matchTransform(shoulder_grp, shoulder)
-cmds.matchTransform(elbow_grp, elbow)
-cmds.matchTransform(wrist_grp, wrist)
-
-#parent joints to cons
-cmds.parentConstraint(shoulder_con[0], shoulder)
-cmds.parentConstraint(elbow_con[0], elbow)
-cmds.parentConstraint(wrist_con[0], wrist)
-
-#parent grps to cons
-cmds.parent(wrist_grp, elbow_con[0])
-cmds.parent(elbow_grp, shoulder_con[0])
 #################################################
 
 ################ik_creation######################
