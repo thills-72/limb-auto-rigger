@@ -34,6 +34,30 @@ def locator_to_surface_cv(surf, U, V):
     cmds.connectAttr(f"{decompose}.outputTranslate", f"{locator}.translate")
     cmds.connectAttr(f"{decompose}.outputRotate", f"{locator}.rotate")
     return locator
+    
+def skinning_joint_density(ribbon, density):
+    locators = []
+    for index in range(0, density):
+        locators.append(locator_to_surface_cv(ribbon, 0.5, (index / density)))
+    return locators
+    
+def cross_product(vecA, vecB):
+    out_vec = [None, None, None]
+    out_vec[0] = ((vecA[1] * vecB[2]) - (vecB[1] * vecA[2]))
+    out_vec[1] = (-1 * ((vecA[0] * vecB[2]) - (vecB[0] * vecA[2])))
+    out_vec[2] = ((vecA[0] * vecB[1]) - (vecB[0] * vecA[1]))
+    return out_vec
+    
+def vector_normalize(vec):
+    scaler = 1 / (abs(math.sqrt(math.pow(vec[0], 2) + math.pow(vec[1], 2) + math.pow(vec[2], 2))))
+    out_vec = [i * scaler for i in vec]
+    return out_vec
+    
+def move_vector(vecA, vecB):
+    out_vec = [None, None, None]
+    for index in range(0, 3):
+        out_vec[index] = vecA[index] + vecB[index]
+    return out_vec
 
 def translates_to_zero(object):
     cmds.setAttr(f"{object}.translateX", 0)
@@ -85,36 +109,27 @@ aVector = [None, None, None]
 bVector = [None, None, None]
 nVectorPos = [None, None, None]
 nVectorNeg = [None, None, None]
-scale_constant = 1
 
-aVector[0] = B[0] - A[0]
-aVector[1] = B[1] - A[1]
-aVector[2] = B[2] - A[2]
-aVectorMag = scale_constant / (abs(math.sqrt(math.pow(aVector[0], 2) + math.pow(aVector[1], 2) + math.pow(aVector[2], 2))))
-aVector = [i * aVectorMag for i in aVector]
+for index in range(0, 3):
+    aVector[index] = B[index] - A[index]
+aVector = vector_normalize(aVector)
 
-bVector[0] = B[0] - C[0]
-bVector[1] = B[1] - C[1]
-bVector[2] = B[2] - C[2]
-bVectorMag = scale_constant / (abs(math.sqrt(math.pow(bVector[0], 2) + math.pow(bVector[1], 2) + math.pow(bVector[2], 2))))
-bVector = [i * bVectorMag for i in bVector]
+for index in range(0, 3):
+    bVector[index] = B[index] - C[index]
+bVector  = vector_normalize(bVector)
 
-nVectorPos[0] = ((aVector[1] * bVector[2]) - (bVector[1] * aVector[2]))
-nVectorPos[1] = (-1 * ((aVector[0] * bVector[2]) - (bVector[0] * aVector[2])))
-nVectorPos[2] = ((aVector[0] * bVector[1]) - (bVector[0] * aVector[1]))
+nVectorPos = cross_product(aVector, bVector)
 
-nVectorPosB = [nVectorPos[0] + B[0], nVectorPos[1] + B[1], nVectorPos[2] + B[2]]
-nVectorPosA = [nVectorPos[0] + A[0], nVectorPos[1] + A[1], nVectorPos[2] + A[2]]
-nVectorPosC = [nVectorPos[0] + C[0], nVectorPos[1] + C[1], nVectorPos[2] + C[2]]
+nVectorPosA = move_vector(nVectorPos, A)
+nVectorPosB = move_vector(nVectorPos, B)
+nVectorPosC = move_vector(nVectorPos, C)
 posCurve = [nVectorPosA, nVectorPosB, nVectorPosC]
 
-nVectorNeg[0] = ((bVector[1] * aVector[2]) - (aVector[1] * bVector[2]))
-nVectorNeg[1] = (-1 * ((bVector[0] * aVector[2]) - (aVector[0] * bVector[2])))
-nVectorNeg[2] = ((bVector[0] * aVector[1]) - (aVector[0] * bVector[1]))
+nVectorNeg = cross_product(bVector, aVector)
 
-nVectorNegB = [nVectorNeg[0] + B[0], nVectorNeg[1] + B[1], nVectorNeg[2] + B[2]]
-nVectorNegA = [nVectorNeg[0] + A[0], nVectorNeg[1] + A[1], nVectorNeg[2] + A[2]]
-nVectorNegC = [nVectorNeg[0] + C[0], nVectorNeg[1] + C[1], nVectorNeg[2] + C[2]]
+nVectorNegA = move_vector(nVectorNeg, A)
+nVectorNegB = move_vector(nVectorNeg, B)
+nVectorNegC = move_vector(nVectorNeg, C)
 negCurve = [nVectorNegA, nVectorNegB, nVectorNegC]
 
 crv1 = cmds.curve(degree = 1, point = [posCurve[0], posCurve[1]])
@@ -139,17 +154,9 @@ cmds.select(sineBlend)
 sine_deformer = cmds.nonLinear(type = "sine")
 """
 
-locators = []
-locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.0))
-locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.25))
-locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.5))
-locators.append(locator_to_surface_cv(ribbon1, 0.5, 0.75))
+locators = skinning_joint_density(ribbon1, 8)
 
-locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.0))
-locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.25))
-locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.5))
-locators.append(locator_to_surface_cv(ribbon2, 0.5, 0.75))
-locators.append(locator_to_surface_cv(ribbon2, 0.5, 1.0))
+locators = locators + skinning_joint_density(ribbon2, 8)
 
 cmds.skinCluster(joints[0], joints[1], ribbon1)
 cmds.skinCluster(joints[1], joints[2], ribbon2)
@@ -169,7 +176,7 @@ for index, loc in enumerate(locators_for_controls):
     control_groups.append(cmds.group())
     pConstraint = cmds.parentConstraint(loc, control_groups[index], maintainOffset = False)
     cmds.delete(pConstraint)
-    cmds.parentConstraint(controls[index], joints_for_controls[index])
+    cmds.parentConstraint(ribbon_controls[index], joints_for_controls[index])
     shape_circle_cons(ribbon_controls[index], 3)
     cmds.parentConstraint(loc, ribbon_controls[index])
 
@@ -260,6 +267,7 @@ elbow_pos = cmds.xform(elbow, query = True, worldSpace = True, translation = Tru
 wrist_pos = cmds.xform(wrist, query = True, worldSpace = True, translation = True)
 
 crv = cmds.curve(degree = 1, p = [shoulder_pos, elbow_pos, wrist_pos])
+pv_distance = (aVector[0] + aVector[1] + aVector[2] + bVector[0] + bVector[1] + bVector[2]) / 6
 cmds.moveVertexAlongDirection(crv + ".cv[1]", n = 8)
 pv_pos = cmds.xform(crv + ".cv[1]", query = True, worldSpace = True, translation = True)
 
@@ -279,6 +287,60 @@ cmds.poleVectorConstraint(pv_con, ikh[0])
 
 #orient constraint wrist joint to arm con
 cmds.orientConstraint(arm_con, wrist, maintainOffset = True)
+
+#create distance between and distance dimension nodes for forearm and upper arm
+####implement-stretch######
+dd1 = cmds.distanceDimension(startPoint = (1, 0, 0), endPoint = (0, 0, 0))
+dd2 = cmds.distanceDimension(startPoint = (2, 0, 0), endPoint = (0, 2, 0))
+cmds.setAttr(dd1 + ".visibility", False)
+cmds.setAttr(dd2 + ".visibility", False)
+locator1 = cmds.listConnections(dd1)[0]
+locator2 = cmds.listConnections(dd1)[1]
+locator3 = cmds.listConnections(dd2)[0]
+locator4 = cmds.listConnections(dd2)[1]
+cmds.parent(locator1, ik_joints[1])
+cmds.parent(locator2, arm_con)
+cmds.parent(locator3, ik_joints[0])
+cmds.parent(locator4, ik_joints[1])
+cmds.select(locator1)
+cmds.move(0, 0, 0, objectSpace = True)
+cmds.select(locator2)
+cmds.move(0, 0, 0, objectSpace = True)
+cmds.select(locator3)
+cmds.move(0, 0, 0, objectSpace = True) 
+cmds.select(locator4)
+cmds.move(0, 0, 0, objectSpace = True)
+base_length = cmds.getAttr(dd1 + ".distance") + cmds.getAttr(dd2 + ".distance")
+root_locator_shape = cmds.listRelatives(locator3, children = True)[0]
+end_locator_shape = cmds.listRelatives(locator2, children = True)[0]
+dd3 = cmds.distanceDimension(startPoint = (0, 0, 0), endPoint = (1, 0, 0))
+cmds.setAttr(dd3 + ".visibility", False)
+temp_loc1 = cmds.listConnections(dd3)[0]
+temp_loc2 = cmds.listConnections(dd3)[1]
+cmds.connectAttr(root_locator_shape + ".worldPosition[0]", dd3 + ".startPoint", force = True)
+cmds.connectAttr(end_locator_shape + ".worldPosition[0]", dd3 + ".endPoint", force = True)
+cmds.delete(temp_loc1)
+cmds.delete(temp_loc2)
+
+stretch_condition_node = cmds.createNode("condition")
+cmds.setAttr(stretch_condition_node + ".operation", 2)
+cmds.connectAttr(dd3 + ".distance", stretch_condition_node + ".firstTerm")
+cmds.setAttr(stretch_condition_node + ".secondTerm", base_length)
+ratio = cmds.createNode("divide")
+cmds.connectAttr(dd3 + ".distance", ratio + ".input1")
+cmds.setAttr(ratio + ".input2", base_length)
+cmds.connectAttr(ratio + ".output", stretch_condition_node + ".colorIfTrueR")
+
+#create/connect stretch toggle
+stretch_switch_node = cmds.createNode("condition")
+cmds.addAttr(arm_con, longName = "stretch", attributeType = "float", min = 0, max = 1, keyable = True)
+cmds.connectAttr(arm_con + ".stretch", stretch_switch_node + ".firstTerm")
+cmds.setAttr(stretch_switch_node + ".secondTerm", 1)
+cmds.connectAttr(stretch_condition_node + ".outColorR", stretch_switch_node + ".colorIfTrueR")
+cmds.setAttr(stretch_switch_node + ".colorIfFalseR", 1)
+cmds.connectAttr(stretch_switch_node + ".outColorR", ik_joints[0] + ".scaleX")
+cmds.connectAttr(stretch_switch_node + ".outColorR", ik_joints[1] + ".scaleX")
+ 
 #################################################
 
 ##################tie_together###################
@@ -286,7 +348,6 @@ shoulder_constraint = cmds.parentConstraint(ik_joints[0], fk_joints[0], joints[0
 elbow_constraint = cmds.parentConstraint(ik_joints[1], fk_joints[1], joints[1])
 wrist_constraint = cmds.parentConstraint(ik_joints[2], fk_joints[2], joints[2])
 
-print(arm_con)
 cmds.addAttr(arm_con, longName = "ikfk", attributeType = "float", min = 0, max = 1, keyable = True)
 cmds.addAttr(arm_con, longName = "ribbon_Controls", attributeType = "float", min = 0, max = 1, keyable = True)
 
@@ -308,3 +369,10 @@ cmds.connectAttr(reverse + ".outputX", pv_con + ".visibility")
 
 for index, con in enumerate(ribbon_controls):
     cmds.connectAttr(arm_con + ".ribbon_Controls", con + ".visibility")
+
+for index, jnt in enumerate(ik_joints):
+    cmds.setAttr(jnt + ".visibility", False)
+
+for index, jnt in enumerate(fk_joints):
+    cmds.setAttr(jnt + ".visibility", False)
+#################################################
