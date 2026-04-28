@@ -90,11 +90,13 @@ def create_ribbon(point1, point2, point3, point4):
   
 def ribbon_skinning_joints(ribbon, root_joint, density):
     joint_list = []
+    child_joint = cmds.listConnections(root_joint, destination = True)[0]
     info_node = cmds.pointOnSurface(ribbon, parameterU = 0.5, parameterV = 0.5, constructionHistory = True)
     for index in range(0, density):
+        control_position = index / (density - 1)
         joint_list.append(cmds.joint())
         cmds.parent(joint_list[index], root_joint)
-        cmds.setAttr(info_node + ".parameterV", index / (density - 1))
+        cmds.setAttr(info_node + ".parameterV", control_position)
         position = cmds.getAttr(info_node + ".position")[0]
         cmds.move(position[0], position[1], position[2], joint_list[index], worldSpace = True)
     cmds.skinCluster(joint_list, ribbon, toSelectedBones = True)
@@ -107,6 +109,14 @@ def ribbon_skinning_joints(ribbon, root_joint, density):
 
 positions = []
 joints = cmds.ls(selection = True)
+
+ik_joints = cmds.duplicate(joints[0], renameChildren = True)
+for index, jnt in enumerate(ik_joints):
+    ik_joints[index] = cmds.rename(ik_joints[index], ik_joints[index] + "_ik")
+
+fk_joints = cmds.duplicate(joints[0], renameChildren = True)
+for index in range(0, 3):
+    fk_joints[index] = cmds.rename(fk_joints[index], fk_joints[index] + "_fk")
 
 for jnt in joints:
     position = cmds.xform(jnt, query = True, worldSpace = True, translation = True)
@@ -175,30 +185,29 @@ cmds.select(sineBlend)
 sine_deformer = cmds.nonLinear(type = "sine")
 """
 
-locators = skinning_joint_density(ribbon1, 8)
-locators = locators + skinning_joint_density(ribbon2, 8)
+locators = skinning_joint_density(ribbon1, 16)
+locators = locators + skinning_joint_density(ribbon2, 16)
 
-#cmds.skinCluster(joints[0], joints[1], ribbon1)
-#cmds.skinCluster(joints[1], joints[2], ribbon2)
+geo_skinning_jnts = create_child_joints(locators)
 
-skinning_jnts = create_child_joints(locators)
+ribbon_control_jnts = []
+ribbon_control_jnts = ribbon_skinning_joints(ribbon1, joints[0], 3)
+ribbon_control_jnts = ribbon_control_jnts + ribbon_skinning_joints(ribbon2, joints[1], 3)
 
-ribbon_skinning_joints(ribbon1, joints[0], 3)
-
-"""
-locators_for_controls = locators[1:4] + locators [5:8]
-joints_for_controls = skinning_jnts[1:4] + skinning_jnts[5:8]
+ribbon_control_groups = []
 ribbon_controls = []
-control_groups = []
-for index, loc in enumerate(locators_for_controls):
+for index, jnt in enumerate(ribbon_control_jnts):
     ribbon_controls.append(cmds.circle()[0])
-    control_groups.append(cmds.group())
-    pConstraint = cmds.parentConstraint(loc, control_groups[index], maintainOffset = False)
-    cmds.delete(pConstraint)
-    cmds.parentConstraint(ribbon_controls[index], joints_for_controls[index])
     shape_circle_cons(ribbon_controls[index], 3)
-    cmds.parentConstraint(loc, ribbon_controls[index])
-"""
+    ribbon_control_groups.append(cmds.group(ribbon_controls[index]))
+    pConstraint = cmds.pointConstraint(jnt, ribbon_control_groups[index], maintainOffset = False)
+    cmds.delete(pConstraint)
+    root_joint = cmds.listConnections(ribbon_control_jnts[index])[0]
+    oConstraint = cmds.orientConstraint(root_joint, ribbon_control_groups[index], maintainOffset = False, offset = [0, 90, 0])
+    cmds.delete(oConstraint)
+    cmds.parentConstraint(ribbon_controls[index], ribbon_control_jnts[index], maintainOffset = True)
+    cmds.parent(ribbon_control_groups[index], root_joint) 
+
 
 """
 cmds.parent(twistBlend, twist_deformer, locators[0])
@@ -213,11 +222,43 @@ cmds.blendShape(twistBlend, sineBlend, surface1)
 """
 #################################################
 
+################fk_creation######################
+
+shoulder = fk_joints[0]
+elbow = fk_joints[1]
+wrist = fk_joints[2]
+
+#create control
+shoulder_con = cmds.circle()
+cmds.select(shoulder_con[0] + ".cv[:]")
+cmds.rotate(0, "90deg", 0, relative = True)
+cmds.scale(3.5, 3.5, 3.5)
+elbow_con = cmds.duplicate(shoulder_con[0])
+wrist_con = cmds.duplicate(shoulder_con[0])
+
+#parent controls
+shoulder_grp = cmds.group(shoulder_con[0])
+elbow_grp = cmds.group(elbow_con[0])
+wrist_grp = cmds.group(wrist_con[0])
+
+#move grps to joints
+cmds.matchTransform(shoulder_grp, shoulder)
+cmds.matchTransform(elbow_grp, elbow)
+cmds.matchTransform(wrist_grp, wrist)
+
+#parent joints to cons
+cmds.parentConstraint(shoulder_con[0], shoulder)
+cmds.parentConstraint(elbow_con[0], elbow)
+cmds.parentConstraint(wrist_con[0], wrist)
+
+#parent grps to cons
+cmds.parent(wrist_grp, elbow_con[0])
+cmds.parent(elbow_grp, shoulder_con[0])
+#################################################
+
 ################ik_creation######################
 #select joint chain
-ik_joints = cmds.duplicate(joints[0], renameChildren = True)
-for index, jnt in enumerate(ik_joints):
-    ik_joints[index] = cmds.rename(ik_joints[index], ik_joints[index] + "_ik")
+
 shoulder = ik_joints[0]
 elbow = ik_joints[1]
 wrist = ik_joints[2]
@@ -351,12 +392,15 @@ cmds.connectAttr(reverse + ".outputX", elbow_constraint[0] + f".{ik_joints[1]}W0
 cmds.connectAttr(reverse + ".outputX", wrist_constraint[0] + f".{ik_joints[2]}W0")
 cmds.connectAttr(reverse + ".outputX", pv_con + ".visibility")
 
-for index, con in enumerate(ribbon_controls):
+for con in ribbon_controls:
     cmds.connectAttr(arm_con + ".ribbon_Controls", con + ".visibility")
 
-for index, jnt in enumerate(ik_joints):
+for jnt in ik_joints:
     cmds.setAttr(jnt + ".visibility", False)
 
-for index, jnt in enumerate(fk_joints):
+for jnt in fk_joints:
+    cmds.setAttr(jnt + ".visibility", False)
+    
+for jnt in ribbon_control_jnts:
     cmds.setAttr(jnt + ".visibility", False)
 #################################################
