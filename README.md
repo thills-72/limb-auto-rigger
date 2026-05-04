@@ -10,7 +10,7 @@ GitHub Repo: https://github.com/thills-72/limb-auto-rigger
 This auto-rigging script is built to run inside of Maya using the
 Maya Python command library integrated natively. It does not make use
 of the Maya OpenAPI and as such executes some additional math that could
-be bypassed thorugh OpenAPI calls.
+be bypassed through OpenAPI calls.
 
 ### Features
 There are three primary features: an ik/fk switch, orientation-agnostic
@@ -26,3 +26,11 @@ skinning density, alternative ribbon deformation calculations and implementation
 on a two joint or 4+ joint chain is another area of development interest, as 
 well as responsive control sizing and pole-vector placement based on joint 
 translation size.
+
+### Requirements
+Can only be used inside of Maya.
+
+### Proposal
+The initial proposal for this project, can be assumed that everything described 
+and not included already is a part of future development plans. Implementation 
+ideas described here may be incorrect/not actually utilized. 
