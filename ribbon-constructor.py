@@ -7,7 +7,6 @@ the surface to that point
 surf: string
 U, V: float
 """ 
-
 def locator_to_surface_cv(surf, U, V):
     #create point on surface node
     infoNode = cmds.pointOnSurface(surf, parameterU = U, parameterV = V, 

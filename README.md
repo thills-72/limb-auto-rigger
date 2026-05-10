@@ -1,7 +1,7 @@
 # Limb Auto Rigger
 
 ## Demo
-Demo Video: <URL>
+Demo Video: https://youtu.be/071EdHYtzhE
 
 ## GitHub Repository
 GitHub Repo: https://github.com/thills-72/limb-auto-rigger
